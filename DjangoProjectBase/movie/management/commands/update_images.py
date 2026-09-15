@@ -4,6 +4,7 @@ from openai import OpenAI
 from django.core.management.base import BaseCommand
 from movie.models import Movie
 from dotenv import load_dotenv
+import base64
 
 class Command(BaseCommand):
     help = "Generate images with OpenAI and update movie image field"
@@ -51,23 +52,28 @@ class Command(BaseCommand):
 
         # ✅ Generate image with OpenAI
         response = client.images.generate(
-            model="dall-e-2",
+            model="gpt-image-1",
             prompt=prompt,
-            size="256x256",
-            quality="standard",
+            size="1024x1024",
+            quality="auto",
             n=1,
         )
-        image_url = response.data[0].url
+        image_data = response.data[0]
 
         # ✅ Prepare the filename and full save path
         image_filename = f"m_{movie_title}.png"
         image_path_full = os.path.join(save_folder, image_filename)
 
         # ✅ Download the image
-        image_response = requests.get(image_url)
-        image_response.raise_for_status()
+        if getattr(image_data, "b64_json", None):
+            content = base64.b64decode(image_data.b64_json)
+        else:
+            image_response = requests.get(image_data.url)
+            image_response.raise_for_status()
+            content = image_response.content
+
         with open(image_path_full, 'wb') as f:
-            f.write(image_response.content)
+            f.write(content)
 
         # ✅ Return relative path to be saved in the DB
-        return os.path.join('movie/images', image_filename)
+        return f"movie/images/{image_filename}"
